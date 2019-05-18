@@ -26,7 +26,7 @@ test_requirements = [
 
 setup(
     name='tendril-conventions-series',
-    version='0.1.1',
+    version='0.1.2',
     description="Tendril Series Conventions",
     long_description=readme,
     author="Chintalagiri Shashank",

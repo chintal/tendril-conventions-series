@@ -36,6 +36,9 @@ from tendril.conventions.electronics import parse_resistor
 from tendril.utils.types.electromagnetic import Resistance
 from tendril.utils.types.electromagnetic import Capacitance
 
+from tendril.utils import log
+logger = log.get_logger(__name__, log.INFO)
+
 
 class ValueSeries(object):
     def __init__(self, stype, start, end, device, footprint):
@@ -53,29 +56,29 @@ class ValueSeries(object):
         raise NotImplementedError
 
     def get_symbol(self, value, device=None, footprint=None):
-        from tendril.connectors.geda import gsymlib
+        from tendril.libraries import edasymbols
 
         if device is None:
             device = self._device
         if footprint is None:
             footprint = self._footprint
-        # TODO Handle other parameters such as wattage, voltage
+        # TODO Handle other parameters such as wattage, voltage?
         if self._stype == 'resistor':
             if isinstance(value, (str, Resistance)):
                 try:
-                    return gsymlib.find_resistor(device, footprint, value)
-                except (gsymlib.NoGedaSymbolException, InvalidOperation):
+                    return edasymbols.find_resistor(device, footprint, value)
+                except (edasymbols.nosymbolexception, InvalidOperation):
                     pass
 
         if self._stype == 'capacitor':
             if isinstance(value, (str, Capacitance)):
                 try:
-                    return gsymlib.find_capacitor(device, footprint, value)
-                except (gsymlib.NoGedaSymbolException, InvalidOperation):
+                    return edasymbols.find_capacitor(device, footprint, value)
+                except (edasymbols.nosymbolexception, InvalidOperation):
                     pass
 
         ident = ident_transform(device, value, footprint)
-        return gsymlib.get_symbol(ident)
+        return edasymbols.get_symbol(ident)
 
     def get_type_value(self, value):
         if self._stype == 'capacitor':
@@ -155,6 +158,10 @@ class CustomValueSeries(ValueSeries):
             if not isinstance(self._end, self._typeclass):
                 self._end = self._typeclass(self._end)
 
+    @property
+    def name(self):
+        return self._name
+
     def add_value(self, type_value, value):
         if not isinstance(type_value, self._typeclass):
             type_value = self._typeclass(type_value)
@@ -194,8 +201,13 @@ class CustomValueSeries(ValueSeries):
                 return self._typeclass(type_value)
 
 
-# TODO Improve isolation from gedaif
 custom_series = {}
+
+
+def register_custom_series(cseries):
+    if cseries.name in custom_series.keys():
+        logger.warning("Overwriting custom series '{0}'".format(cseries.name))
+    custom_series[cseries.name] = cseries
 
 
 def get_series(series, stype, start=None, end=None,
@@ -206,7 +218,6 @@ def get_series(series, stype, start=None, end=None,
                 device=device, footprint=footprint
         )
     except ValueError:
-        from tendril.connectors.geda.gsymlib import custom_series
         cseries = copy.deepcopy(custom_series[series])
         assert stype == cseries._stype
         if start is not None:
